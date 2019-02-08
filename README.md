@@ -2,6 +2,7 @@
 Group project of catastrophic interference
 
 ## Useful links
+* Lien vers l'article : https://openreview.net/forum?id=BJlxm30cKm&fbclid=IwAR3kUvKWW-NyzCi7dB_zL47J_KJSMtcqQp8eFQEd5R07VWj5dcCwHJsXRcc
 * https://pytorch.org/tutorials/intermediate/char_rnn_classification_tutorial.html
 
 ## Attentes
