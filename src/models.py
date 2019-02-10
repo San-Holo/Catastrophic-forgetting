@@ -1,6 +1,9 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
+from cutout.model.resnet import ResNet18
+from cutout.model.wide_resnet import WideResNet
+
 
 class CNN(nn.Module):
     """ Basic CNN model. """
@@ -31,6 +34,17 @@ class CNN(nn.Module):
 
         x = self.fc2(x)
         return F.log_softmax(x, dim=1)
+
+
+def load_model(model, device, num_classes, input_channel):
+    if model == 'resnet18':
+        model = ResNet18(num_classes=num_classes, input_channel=input_channel)
+    elif model == 'wideresnet':
+        model = WideResNet(depth=28, num_classes=num_classes, widen_factor=10,
+                           dropRate=0.3)
+    elif model == "cnn":
+        model = CNN()
+    return model.to(device)
 
 
 if __name__ == '__main__':

@@ -1,6 +1,6 @@
 # Data and outputs
 data/*
-output/*
+src/output/*
 
 
 # Byte-compiled / optimized / DLL files

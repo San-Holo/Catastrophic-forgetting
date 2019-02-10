@@ -70,6 +70,9 @@ Les datasets avec moins de complexité et de diversité dans les exemples (comme
 We observe that when removing a random subset of the dataset, performance rapidly decreases. Comparatively, by removing examples ordered by number of forgetting events, 30% of the dataset can be removed while maintaining comparable generalization performance as the base model trained on the full dataset, and up to 35% can be removed with marginal degradation (less than 0.2%).
 
 
+# 6 - Transferable forgetting events
+Calculer le classement des exemples les plus oubliés, ça prends du temps. Il s'avère que cet ordre est toujours plus ou moins le même selon qu'on le calcule sur un gros réseau ou un plus petit. Du coup autant le calculer avec un CNN et utiliser cet ordre avec notre WideResNet
+
 # Conclusion
 (i) certain examples are forgotten with high frequency, and some not at all
 (ii) a data set’s (un)forgettable examples generalize across neural architectures;
