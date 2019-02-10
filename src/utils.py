@@ -1,4 +1,5 @@
 import sys
+import os
 
 import numpy as np
 import torch
@@ -35,7 +36,8 @@ def noisy(image, noise_percentage, noise_std):
     return out
 
 
-def train(args, model, device, trainset, optimizer, epoch, example_stats):
+def train(trainset, model, optimizer, criterion, batch_size, device, epoch,
+          example_stats, epochs, train_indx):
     """ Train model for one epoch.
 
     :param example_stats: Dictionary containing statistics accumulated over
@@ -44,7 +46,6 @@ def train(args, model, device, trainset, optimizer, epoch, example_stats):
     train_loss = 0
     correct = 0
     total = 0
-    batch_size = args.batch_size
 
     model.train()
 
@@ -52,8 +53,8 @@ def train(args, model, device, trainset, optimizer, epoch, example_stats):
     trainset_permutation_inds = np.random.permutation(
         np.arange(len(trainset.train_labels)))
 
-    for batch_idx, batch_start_ind in enumerate(
-            range(0, len(trainset.train_labels), batch_size)):
+    for batch_idx, batch_start_ind in \
+            enumerate(range(0, len(trainset.train_labels), batch_size)):
 
         # Get trainset indices for batch
         batch_inds = trainset_permutation_inds[batch_start_ind:
@@ -115,7 +116,7 @@ def train(args, model, device, trainset, optimizer, epoch, example_stats):
         sys.stdout.write('\r')
         sys.stdout.write(
             '| Epoch [%3d/%3d] Iter[%3d/%3d]\t\tLoss: %.4f Acc@1: %.3f%%' %
-            (epoch, args.epochs, batch_idx + 1,
+            (epoch, epochs, batch_idx + 1,
              (len(trainset) // batch_size) + 1, loss.item(),
              100. * correct.item() / total))
         sys.stdout.flush()
@@ -126,14 +127,13 @@ def train(args, model, device, trainset, optimizer, epoch, example_stats):
         example_stats['train'] = index_stats
 
 
-def test(args, model, device, testset, example_stats):
+def test(testset, model, criterion, device, example_stats, epoch, output_dir,
+         dataset_name, save_fname, best_acc):
     """ Evaluate model predictions on heldout test data.
 
     :param example_stats: Dictionary containing statistics accumulated over
     every presentation of example.
     """
-    global best_acc
-
     test_loss = 0
     correct = 0
     total = 0
@@ -184,7 +184,7 @@ def test(args, model, device, testset, example_stats):
             'acc': acc,
             'epoch': epoch,
         }
-        save_point = os.path.join(args.output_dir, 'checkpoint', args.dataset)
+        save_point = os.path.join(output_dir, 'checkpoint', dataset_name)
         os.makedirs(save_point, exist_ok=True)
         torch.save(state, os.path.join(save_point, save_fname + '.t7'))
         best_acc = acc

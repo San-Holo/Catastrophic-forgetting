@@ -6,17 +6,17 @@ import random
 import click
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torch.backends.cudnn as cudnn
 import numpy as np
 
 from torchvision import datasets, transforms
 from torch.optim.lr_scheduler import MultiStepLR
-from torchvision import datasets, transforms
 
-from Cutout.util.cutout import Cutout
-from Cutout.model.resnet import ResNet18
-from Cutout.model.wide_resnet import WideResNet
+from cutout.util.cutout import Cutout
+from cutout.model.resnet import ResNet18
+from cutout.model.wide_resnet import WideResNet
+from models import CNN
+from utils import get_hms, noisy, train, test
 
 
 @click.command()
@@ -27,7 +27,7 @@ from Cutout.model.wide_resnet import WideResNet
               help='Input batch size for training')
 @click.option('--epochs', type=int, default=200,
               help='Number of epochs to train')
-@click.option('--optimizer', type=click.Choice(['sgd', 'adm']), default='sgd',
+@click.option('--optimizer', type=click.Choice(['sgd', 'adam']), default='sgd',
               help='Optimizer to use')
 @click.option('--learning-rate', type=float, default=0.1,
               help='Learning rate')
@@ -47,6 +47,8 @@ from Cutout.model.wide_resnet import WideResNet
               help='Length of the holes with cutout')
 @click.option('--seed', type=int, default=0,
               help='Set the random seed')
+@click.option('--path-dir-data', type=str, default="../data",
+              help='Path to the dir containing the data')
 @click.option('--input-dir', type=str, default="cifar10_results",
               help='Set the random seed')
 @click.option('--output-dir', type=str, default="output",
@@ -72,16 +74,17 @@ from Cutout.model.wide_resnet import WideResNet
               help='standard deviation of Gaussian pixel noise')
 def main(dataset, model, batch_size, epochs, optimizer, learning_rate,
          momentum, cuda, no_dropout, data_augmentation, cutout, n_holes,
-         length_holes, seed, input_dir, output_dir, sorting_file, remove_n,
-         keep_lowest_n, remove_subsample, noise_percent_labels,
-         noise_percent_pixels, noise_std_pixels):
+         length_holes, seed, path_dir_data, input_dir, output_dir,
+         sorting_file, remove_n, keep_lowest_n, remove_subsample,
+         noise_percent_labels, noise_percent_pixels, noise_std_pixels):
     # Process output filename
+    args = locals()
     ordered_args = [
         'dataset', 'data_augmentation', 'cutout', 'seed', 'sorting_file',
         'remove_n', 'keep_lowest_n', 'remove_subsample',
         'noise_percent_labels', 'noise_percent_pixels', 'noise_std_pixels'
     ]
-    save_fname = '__'.join('{}_{}'.format(arg, globals()[arg])
+    save_fname = '__'.join('{}_{}'.format(arg, args[arg])
                            for arg in ordered_args)
 
     # Set appropriate devices
@@ -105,10 +108,10 @@ def main(dataset, model, batch_size, epochs, optimizer, learning_rate,
             transforms.Normalize((0.1307, ), (0.3081, ))
         ]
         transform = transforms.Compose(all_transforms)
-        trainset = datasets.MNIST(root='data', train=True, download=True,
-                                  transform=transform)
-        testset = datasets.MNIST(root='data', train=False, download=True,
-                                 transform=transform)
+        trainset = datasets.MNIST(root=path_dir_data, train=True,
+                                  download=True, transform=transform)
+        testset = datasets.MNIST(root=path_dir_data, train=False,
+                                 download=True, transform=transform)
     elif dataset == "permuted_mnist":
         pixel_permutation = torch.randperm(28 * 28)
         all_transforms = [
@@ -119,10 +122,10 @@ def main(dataset, model, batch_size, epochs, optimizer, learning_rate,
             )
         ]
         transform = transforms.Compose(all_transforms)
-        trainset = datasets.MNIST(root='data', train=True, download=True,
-                                  transform=transform)
-        testset = datasets.MNIST(root='data', train=False, download=True,
-                                 transform=transform)
+        trainset = datasets.MNIST(root=path_dir_data, train=True,
+                                  download=True, transform=transform)
+        testset = datasets.MNIST(root=path_dir_data, train=False,
+                                 download=True, transform=transform)
     elif dataset == 'cifar10':
         # Image Preprocessing
         normalize = transforms.Normalize(
@@ -150,10 +153,10 @@ def main(dataset, model, batch_size, epochs, optimizer, learning_rate,
         test_transform = transforms.Compose([transforms.ToTensor(), normalize])
 
         num_classes = 10
-        trainset = datasets.CIFAR10(root='data', train=True,
+        trainset = datasets.CIFAR10(root=path_dir_data, train=True,
                                     transform=train_transform,
                                     download=True)
-        testset = datasets.CIFAR10(root='data', train=False,
+        testset = datasets.CIFAR10(root=path_dir_data, train=False,
                                    transform=test_transform,
                                    download=True)
     elif dataset == 'cifar100':
@@ -183,10 +186,10 @@ def main(dataset, model, batch_size, epochs, optimizer, learning_rate,
         test_transform = transforms.Compose([transforms.ToTensor(), normalize])
 
         num_classes = 100
-        trainset = datasets.CIFAR100(root='data', train=True,
+        trainset = datasets.CIFAR100(root=path_dir_data, train=True,
                                      transform=train_transform,
                                      download=True)
-        testset = datasets.CIFAR100(root='data', train=False,
+        testset = datasets.CIFAR100(root=path_dir_data, train=False,
                                     transform=test_transform,
                                     download=True)
 
@@ -280,9 +283,65 @@ def main(dataset, model, batch_size, epochs, optimizer, learning_rate,
 
     print('Training on ' + str(len(trainset.train_labels)) + ' examples')
 
-    #######################################
-    # TODO: J'EN SUIS ICI
-    ####################################
+    # Setup model
+    if model == 'resnet18':
+        model = ResNet18(num_classes=num_classes)
+    elif model == 'wideresnet':
+        model = WideResNet(depth=28, num_classes=num_classes, widen_factor=10,
+                           dropRate=0.3)
+    elif model == "cnn":
+        model = CNN()
+    model = model.to(device)
+
+    # Setup loss
+    criterion = nn.CrossEntropyLoss().cuda()
+    criterion.__init__(reduction='none')
+
+    # Setup optimizer
+    if optimizer == 'adam':
+        model_optimizer = torch.optim.Adam(model.parameters(),
+                                           lr=learning_rate)
+    elif optimizer == 'sgd':
+        model_optimizer = torch.optim.SGD(model.parameters(),
+                                          lr=learning_rate,
+                                          momentum=momentum,
+                                          nesterov=True,
+                                          weight_decay=5e-4)
+        scheduler = MultiStepLR(model_optimizer, milestones=[60, 120, 160],
+                                gamma=0.2)
+
+    # Initialize dictionary to save statistics for every example presentation
+    example_stats = {}
+
+    best_acc = 0
+    elapsed_time = 0
+    for epoch in range(epochs):
+        start_time = time.time()
+
+        train(trainset, model, model_optimizer, criterion, batch_size, device,
+              epoch, example_stats, epochs, train_indx)
+        test(testset, model, criterion, device, example_stats, epoch,
+             output_dir, dataset, save_fname, best_acc)
+
+        epoch_time = time.time() - start_time
+        elapsed_time += epoch_time
+        print('| Elapsed time : %d:%02d:%02d' % (get_hms(elapsed_time)))
+
+        # Update optimizer step
+        if optimizer == 'sgd':
+            scheduler.step(epoch)
+
+        # Save the stats dictionary
+        fname = os.path.join(output_dir, save_fname)
+        with open(fname + "__stats_dict.pkl", "wb") as f:
+            pickle.dump(example_stats, f)
+
+        # Log the best train and test accuracy so far
+        with open(fname + "__best_acc.txt", "w") as f:
+            f.write('train test \n')
+            f.write(str(max(example_stats['train'][1])))
+            f.write(' ')
+            f.write(str(max(example_stats['test'][1])))
 
 
 if __name__ == '__main__':
