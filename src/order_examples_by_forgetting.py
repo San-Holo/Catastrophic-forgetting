@@ -6,13 +6,12 @@ import pickle
 
 # Calculates forgetting statistics per example
 #
-# diag_stats: dictionary created during training containing 
-#             loss, accuracy, and missclassification margin 
+# diag_stats: dictionary created during training containing
+#             loss, accuracy, and missclassification margin
 #             per example presentation
 # npresentations: number of training epochs
 #
 # Returns 4 dictionaries with statistics per example
-#
 def compute_forgetting_statistics(diag_stats, npresentations):
 
     presentations_needed_to_learn = {}
@@ -36,7 +35,7 @@ def compute_forgetting_statistics(diag_stats, npresentations):
             else:
                 unlearned_per_presentation[example_id] = []
 
-            # Find number of presentations needed to learn example, 
+            # Find number of presentations needed to learn example,
             # e.g. last presentation when acc is 0
             if len(np.where(presentation_acc == 0)[0]) > 0:
                 presentations_needed_to_learn[example_id] = np.where(
@@ -48,7 +47,7 @@ def compute_forgetting_statistics(diag_stats, npresentations):
             margins_per_presentation = np.array(
                 example_stats[2][:npresentations])
 
-            # Find the presentation at which the example was first learned, 
+            # Find the presentation at which the example was first learned,
             # e.g. first presentation when acc is 1
             if len(np.where(presentation_acc == 1)[0]) > 0:
                 first_learned[example_id] = np.where(
@@ -108,10 +107,9 @@ def sort_examples_by_forgetting(unlearned_per_presentation_all,
 # Returns 1 if filename matches the filter specified by the argument list, 0 otherwise
 #
 def check_filename(fname, args_list):
-
     # If no arguments are specified to filter by, pass filename
     if args_list is None:
-        return 1
+        return True
 
     for arg_ind in np.arange(0, len(args_list), 2):
         arg = args_list[arg_ind]
@@ -120,28 +118,19 @@ def check_filename(fname, args_list):
         # Check if filename matches the current arg and arg value
         if arg + '_' + arg_value + '__' not in fname:
             print('skipping file: ' + fname)
-            return 0
-
-    return 1
+            return False
+    return True
 
 
 if __name__ == "__main__":
-
     parser = argparse.ArgumentParser(description="Options")
     parser.add_argument('--input_dir', type=str, required=True)
-    parser.add_argument(
-        '--input_fname_args',
-        nargs='+',
-        help=
-        'arguments and argument values to select input filenames, i.e. arg1 val1 arg2 val2'
-    )
+    parser.add_argument('--input_fname_args', nargs='+',
+                        help=('arguments and argument values to select input f'
+                              'ilenames, i.e. arg1 val1 arg2 val2'))
     parser.add_argument('--output_dir', type=str, required=True)
-    parser.add_argument(
-        '--output_name',
-        type=str,
-        required=True)
+    parser.add_argument('--output_name', type=str, required=True)
     parser.add_argument('--epochs', type=int, default=200)
-
     args = parser.parse_args()
     print(args)
 
@@ -152,8 +141,8 @@ if __name__ == "__main__":
         for f in fs:
 
             # Find the files that match input_fname_args and compute forgetting statistics
-            if f.endswith('stats_dict.pkl') and check_filename(
-                    f, args.input_fname_args):
+            if f.endswith('stats_dict.pkl') and check_filename(f,
+                                                               args.input_fname_args):
                 print('including file: ' + f)
 
                 # Load the dictionary compiled during training run
