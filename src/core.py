@@ -1,4 +1,3 @@
-import sys
 import os
 import pickle
 
@@ -21,18 +20,15 @@ def train(trainset, model, optimizer, criterion, batch_size, device, epoch,
 
     model.train()
 
-    # Get permutation to shuffle trainset
     trainset_permutation_inds = np.random.permutation(
         np.arange(len(trainset.train_labels)))
 
     for batch_idx, batch_start_ind in \
             enumerate(range(0, len(trainset.train_labels), batch_size)):
 
-        # Get trainset indices for batch
         batch_inds = trainset_permutation_inds[batch_start_ind:
                                                batch_start_ind + batch_size]
 
-        # Get batch inputs and targets, transform them appropriately
         transformed_trainset = []
         for ind in batch_inds:
             transformed_trainset.append(trainset.__getitem__(ind)[0])
@@ -40,36 +36,26 @@ def train(trainset, model, optimizer, criterion, batch_size, device, epoch,
         targets = torch.LongTensor(
             np.array(trainset.train_labels)[batch_inds].tolist())
 
-        # Map to available device
         inputs, targets = inputs.to(device), targets.to(device)
-
-        # Forward propagation, compute loss, get predictions
         optimizer.zero_grad()
         outputs = model(inputs)
         loss = criterion(outputs, targets)
         _, predicted = torch.max(outputs.data, 1)
 
-        # Update statistics and loss
         acc = predicted == targets
         for j, index in enumerate(batch_inds):
-            # Get index in original dataset (not sorted by forgetting)
             index_in_original_dataset = train_indx[index]
 
-            # Compute missclassification margin
             output_correct_class = outputs.data[
-                j, targets[j].item()]  # output for correct class
+                j, targets[j].item()]
             sorted_output, _ = torch.sort(outputs.data[j, :])
             if acc[j]:
-                # Example classified correctly, highest incorrect class is 2nd
-                # largest output
                 output_highest_incorrect_class = sorted_output[-2]
             else:
-                # Example misclassified, highest incorrect class is max output
                 output_highest_incorrect_class = sorted_output[-1]
             margin = output_correct_class.item(
             ) - output_highest_incorrect_class.item()
 
-            # Add the statistics of the current training example to dictionary
             index_stats = example_stats.get(index_in_original_dataset,
                                             [[], [], []])
             index_stats[0].append(loss[j].item())
@@ -77,23 +63,12 @@ def train(trainset, model, optimizer, criterion, batch_size, device, epoch,
             index_stats[2].append(margin)
             example_stats[index_in_original_dataset] = index_stats
 
-        # Update loss, backward propagate, update optimizer
         loss = loss.mean()
         train_loss += loss.item()
         total += targets.size(0)
         correct += predicted.eq(targets.data).cpu().sum()
         loss.backward()
         optimizer.step()
-
-        sys.stdout.write('\r')
-        sys.stdout.write(
-            '| Epoch [%3d/%3d] Iter[%3d/%3d]\t\tLoss: %.4f Acc@1: %.3f%%' %
-            (epoch, epochs, batch_idx + 1,
-             (len(trainset) // batch_size) + 1, loss.item(),
-             100. * correct.item() / total))
-        sys.stdout.flush()
-
-        # Add training accuracy to dict
         index_stats = example_stats.get('train', [[], []])
         index_stats[1].append(100. * correct.item() / float(total))
         example_stats['train'] = index_stats
@@ -115,8 +90,6 @@ def test(testset, model, criterion, device, example_stats, epoch, output_dir,
 
     for batch_idx, batch_start_ind in enumerate(
             range(0, len(testset.test_labels), test_batch_size)):
-
-        # Get batch inputs and targets
         transformed_testset = []
         for ind in range(
                 batch_start_ind,
@@ -129,10 +102,7 @@ def test(testset, model, criterion, device, example_stats, epoch, output_dir,
             np.array(testset.test_labels)[batch_start_ind:batch_start_ind +
                                           test_batch_size].tolist())
 
-        # Map to available device
         inputs, targets = inputs.to(device), targets.to(device)
-
-        # Forward propagation, compute loss, get predictions
         outputs = model(inputs)
         loss = criterion(outputs, targets)
         loss = loss.mean()
@@ -141,7 +111,6 @@ def test(testset, model, criterion, device, example_stats, epoch, output_dir,
         total += targets.size(0)
         correct += predicted.eq(targets.data).cpu().sum()
 
-    # Add test accuracy to dict
     acc = 100. * correct.item() / total
     index_stats = example_stats.get('test', [[], []])
     index_stats[1].append(100. * correct.item() / float(total))
@@ -149,9 +118,8 @@ def test(testset, model, criterion, device, example_stats, epoch, output_dir,
     print("\n| Validation Epoch #%d\t\t\tLoss: %.4f Acc@1: %.2f%%" %
           (epoch, loss.item(), acc))
 
-    # Save checkpoint when best model
+    # Save best model to checkpoint dir
     if acc > best_acc:
-        print('| Saving Best model...\t\t\tTop1 = %.2f%%' % (acc))
         state = {
             'acc': acc,
             'epoch': epoch,
@@ -164,7 +132,6 @@ def test(testset, model, criterion, device, example_stats, epoch, output_dir,
 
 def remove_examples(trainset, removing_method, remove_n, remove_subsample,
                     sorting_file, input_dir):
-    # Get indices of examples that should be used for training
     removing_method = -1 if removing_method == '1' else 0
     if sorting_file == 'none':
         train_indx = np.array(range(len(trainset.train_labels)))
@@ -176,31 +143,21 @@ def remove_examples(trainset, removing_method, remove_n, remove_subsample,
         except IOError:
             with open(os.path.join(input_dir, sorting_file), 'rb') as fin:
                 ordered_indx = pickle.load(fin)['indices']
-
-        # Get the indices to remove from training
         elements_to_remove = np.array(
             ordered_indx)[removing_method:removing_method + remove_n]
-
-        # Remove the corresponding elements
         train_indx = np.setdiff1d(range(len(trainset.train_labels)),
                                   elements_to_remove)
 
-    # Remove remove_n number of examples from the train set at random
+    # Remove samples at random
     if removing_method < 0:
         train_indx = np.random.permutation(np.arange(len(
             trainset.train_labels)))[:len(trainset.train_labels) - remove_n]
-
-    # Remove remove_sample number of examples at random from the first
-    # keep_lowest_n examples. Useful when the first removing_method examples
-    # have equal forgetting counts
     elif remove_subsample:
         lowest_n = np.array(ordered_indx)[0:removing_method]
         train_indx = lowest_n[np.random.permutation(np.arange(
             removing_method))[:removing_method - remove_subsample]]
         train_indx = np.hstack((train_indx,
                                 np.array(ordered_indx)[removing_method:]))
-
-    # Reassign train data and labels
     trainset.train_data = trainset.train_data[train_indx, :, :]
     trainset.train_labels = \
         np.array(trainset.train_labels)[train_indx].tolist()
@@ -210,49 +167,35 @@ def remove_examples(trainset, removing_method, remove_n, remove_subsample,
 def apply_noise(trainset, train_indx, noise_percent_pixels,
                 noise_percent_labels, noise_std_pixels, output_dir,
                 save_fname):
-    # Introduce noise to images if specified
+    # Noise img
     if noise_percent_pixels:
-        for ind in range(len(train_indx)):
-            image = trainset.train_data[ind, :, :, :]
-            noisy_image = noisy(image, noise_percent_pixels,
-                                noise_std_pixels)
-            trainset.train_data[ind, :, :, :] = noisy_image
+        for i in range(len(train_indx)):
+            img = trainset.train_data[i, :, :, :]
+            noisy_img = noisy(img, noise_percent_pixels, noise_std_pixels)
+            trainset.train_data[i, :, :, :] = noisy_img
 
-    # Introduce noise to labels if specified
+    # Noise labels
     if noise_percent_labels:
         fname = os.path.join(output_dir, save_fname)
 
         with open(fname + "_changed_labels.txt", "w") as f:
-            # Compute number of labels to change
-            nlabels = len(trainset.train_labels)
-            nlabels_to_change = int(noise_percent_labels * nlabels / 100)
-            nclasses = len(np.unique(trainset.train_labels))
-            print('flipping ' + str(nlabels_to_change) + ' labels')
+            n_labels_to_change = int(
+                noise_percent_labels * len(trainset.train_labels) / 100)
+            labels_idx_to_change = np.random.choice(
+                np.arange(len(trainset.train_labels)),
+                n_labels_to_change, replace=False)
 
-            # Randomly choose which labels to change, get indices
-            labels_inds_to_change = np.random.choice(
-                np.arange(nlabels), nlabels_to_change, replace=False)
-
-            # Flip each of the randomly chosen labels
-            for l, label_ind_to_change in enumerate(labels_inds_to_change):
-                # Possible choices for new label
-                label_choices = np.arange(nclasses)
-
-                # Get true label to remove it from the choices
-                true_label = trainset.train_labels[label_ind_to_change]
-
-                # Remove true label from choices
-                label_choices = np.delete(label_choices, true_label)
-
-                # Get new label and relabel the example with it
-                noisy_label = np.random.choice(label_choices, 1)
-                trainset.train_labels[label_ind_to_change] = noisy_label[0]
-
-                # Write the example index from the original example order, the
-                # old, and the new label
+            # Flip random labels
+            for l, ind_l in enumerate(labels_idx_to_change):
+                l_choices = np.arange(
+                    len(np.unique(trainset.train_labels)))
+                true_l = trainset.train_labels[ind_l]
+                l_choices = np.delete(l_choices, true_l)
+                noisy_label = np.random.choice(l_choices, 1)
+                trainset.train_labels[ind_l] = noisy_label[0]
                 f.write(
-                    str(train_indx[label_ind_to_change]) + ' ' +
-                    str(true_label) + ' ' + str(noisy_label[0]) + '\n')
+                    str(train_indx[ind_l]) + ' ' +
+                    str(true_l) + ' ' + str(noisy_label[0]) + '\n')
 
 
 if __name__ == '__main__':

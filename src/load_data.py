@@ -62,7 +62,7 @@ def load_cifar10(path_dir_data, data_augmentation, cutout, n_holes,
         std=[x / 255.0 for x in [63.0, 62.1, 66.7]]
     )
 
-    # Setup train transforms
+    # Train transforms
     train_transform = transforms.Compose([])
     if data_augmentation:
         train_transform.transforms.append(
@@ -78,7 +78,7 @@ def load_cifar10(path_dir_data, data_augmentation, cutout, n_holes,
             Cutout(n_holes=n_holes, length=length_holes)
         )
 
-    # Setup test transforms
+    # Test transforms
     test_transform = transforms.Compose([transforms.ToTensor(), normalize])
 
     trainset = datasets.CIFAR10(root=path_dir_data, train=True,
@@ -100,7 +100,7 @@ def load_cifar100(path_dir_data, data_augmentation, cutout, n_holes,
         std=[x / 255.0 for x in [63.0, 62.1, 66.7]]
     )
 
-    # Setup train transforms
+    # Train transforms
     train_transform = transforms.Compose([])
     if data_augmentation:
         train_transform.transforms.append(
@@ -116,7 +116,7 @@ def load_cifar100(path_dir_data, data_augmentation, cutout, n_holes,
             Cutout(n_holes=n_holes, length=length_holes)
         )
 
-    # Setup test transforms
+    # Test transforms
     test_transform = transforms.Compose([transforms.ToTensor(), normalize])
 
     trainset = datasets.CIFAR100(root=path_dir_data, train=True,

@@ -1,19 +1,25 @@
+""" Permet de créer un ordonancement des exemples selon leur nombre d'oublis
+dans un apprentissage.
+
+TODO: Transformer ce code en ligne de commande dans le main.
+TODO: Paramètre : --compute-examples-ordering
+"""
+
 import argparse
 import numpy as np
 import os
 import pickle
 
 
-# Calculates forgetting statistics per example
-#
-# diag_stats: dictionary created during training containing
-#             loss, accuracy, and missclassification margin
-#             per example presentation
-# npresentations: number of training epochs
-#
-# Returns 4 dictionaries with statistics per example
 def compute_forgetting_statistics(diag_stats, npresentations):
+    """ Calculates forgetting statistics per example.
+    Returns 4 dictionaries with statistics per example.
 
+    :param diag_stats: dictionary created during training containing
+        loss, accuracy, and missclassification margin
+        per example presentation
+    :param npresentations: number of training epochs
+    """
     presentations_needed_to_learn = {}
     unlearned_per_presentation = {}
     margins_per_presentation = {}
@@ -43,7 +49,8 @@ def compute_forgetting_statistics(diag_stats, npresentations):
             else:
                 presentations_needed_to_learn[example_id] = 0
 
-            # Find the misclassication margin for each presentation of the example
+            # Find the misclassication margin for each presentation of the
+            # example
             margins_per_presentation = np.array(
                 example_stats[2][:npresentations])
 
@@ -55,22 +62,26 @@ def compute_forgetting_statistics(diag_stats, npresentations):
             else:
                 first_learned[example_id] = np.nan
 
-    return presentations_needed_to_learn, unlearned_per_presentation, margins_per_presentation, first_learned
+    return presentations_needed_to_learn, unlearned_per_presentation, \
+        margins_per_presentation, first_learned
 
 
-# Sorts examples by number of forgetting counts during training, in ascending order
-# If an example was never learned, it is assigned the maximum number of forgetting counts
-# If multiple training runs used, sort examples by the sum of their forgetting counts over all runs
-#
-# unlearned_per_presentation_all: list of dictionaries, one per training run
-# first_learned_all: list of dictionaries, one per training run
-# npresentations: number of training epochs
-#
-# Returns 2 numpy arrays containing the sorted example ids and corresponding forgetting counts
-#
 def sort_examples_by_forgetting(unlearned_per_presentation_all,
                                 first_learned_all, npresentations):
+    """ Sorts examples by number of forgetting counts during training, in
+    ascending order.
+    If an example was never learned, it is assigned the maximum number of
+    forgetting counts.
+    If multiple training runs used, sort examples by the sum of their
+    forgetting counts over all runs.
+    Returns 2 numpy arrays containing the sorted example ids and
+    corresponding forgetting counts
 
+    :param unlearned_per_presentation_all: list of dictionaries, one per
+    training run.
+    :param first_learned_all: list of dictionaries, one per training run.
+    :param npresentations: number of training epochs.
+    """
     # Initialize lists
     example_original_order = []
     example_stats = []
@@ -81,13 +92,16 @@ def sort_examples_by_forgetting(unlearned_per_presentation_all,
         example_original_order.append(example_id)
         example_stats.append(0)
 
-        # Iterate over all training runs to calculate the total forgetting count for current example
+        # Iterate over all training runs to calculate the total forgetting
+        # count for current example
         for i in range(len(unlearned_per_presentation_all)):
 
-            # Get all presentations when current example was forgotten during current training run
+            # Get all presentations when current example was forgotten
+            # during current training run
             stats = unlearned_per_presentation_all[i][example_id]
 
-            # If example was never learned during current training run, add max forgetting counts
+            # If example was never learned during current training run, add
+            # max forgetting counts
             if np.isnan(first_learned_all[i][example_id]):
                 example_stats[-1] += npresentations
             else:
@@ -99,14 +113,16 @@ def sort_examples_by_forgetting(unlearned_per_presentation_all,
         example_stats)], np.sort(example_stats)
 
 
-# Checks whether a given file name matches a list of specified arguments
-#
-# fname: string containing file name
-# args_list: list of strings containing argument names and values, i.e. [arg1, val1, arg2, val2,..]
-#
-# Returns 1 if filename matches the filter specified by the argument list, 0 otherwise
-#
 def check_filename(fname, args_list):
+    """ Checks whether a given file name matches a list of specified
+    arguments.
+    Returns 1 if filename matches the filter specified by the argument list,
+    0 otherwise.
+
+    :param fname: string containing file name.
+    :param args_list: list of strings containing argument names and values,
+    i.e. [arg1, val1, arg2, val2,..].
+    """
     # If no arguments are specified to filter by, pass filename
     if args_list is None:
         return True
@@ -134,13 +150,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
     print(args)
 
-    # Initialize lists to collect forgetting stastics per example across multiple training runs
+    # Initialize lists to collect forgetting stastics per example across
+    # multiple training runs
     unlearned_per_presentation_all, first_learned_all = [], []
 
     for d, _, fs in os.walk(args.input_dir):
         for f in fs:
 
-            # Find the files that match input_fname_args and compute forgetting statistics
+            # Find the files that match input_fname_args and compute
+            # forgetting statistics
             if f.endswith('stats_dict.pkl') and check_filename(f,
                                                                args.input_fname_args):
                 print('including file: ' + f)
@@ -149,7 +167,8 @@ if __name__ == "__main__":
                 with open(os.path.join(d, f), 'rb') as fin:
                     loaded = pickle.load(fin)
 
-                # Compute the forgetting statistics per example for training run
+                # Compute the forgetting statistics per example for training
+                # run
                 _, unlearned_per_presentation, _, first_learned = compute_forgetting_statistics(
                     loaded, args.epochs)
 
@@ -162,7 +181,8 @@ if __name__ == "__main__":
             args.input_dir, args.input_fname_args))
     else:
 
-        # Sort examples by forgetting counts in ascending order, over one or more training runs
+        # Sort examples by forgetting counts in ascending order, over one or
+        # more training runs
         ordered_examples, ordered_values = sort_examples_by_forgetting(
             unlearned_per_presentation_all, first_learned_all, args.epochs)
 

@@ -4,13 +4,14 @@ import pickle
 import click
 import torch
 import torch.backends.cudnn as cudnn
+from tqdm import tqdm
 
 from load_data import load_dataset
 from models import load_model
 from optimizer import load_optimizer
 from criterion import load_criterion
 from core import train, test, remove_examples, apply_noise
-from utils import set_seeds
+from utils import set_seeds, process_output_filename
 
 
 @click.command()
@@ -49,7 +50,6 @@ from utils import set_seeds
               help='Set the random seed')
 @click.option('--output-dir', type=str, default="output",
               help='Set the random seed')
-# TODO: Comprendre ces arguments
 @click.option('--sorting-file', type=str, default="none",
               help=('name of a file containing order of examples sorted by for'
                     'getting'))
@@ -75,13 +75,7 @@ def main(dataset, model, batch_size, epochs, optimizer, criterion,
          noise_percent_labels, noise_percent_pixels, noise_std_pixels):
     # Process output filename for saving models
     args = locals()
-    ordered_args = [
-        'dataset', 'data_augmentation', 'cutout', 'seed', 'sorting_file',
-        'remove_n', 'removing_method', 'remove_subsample',
-        'noise_percent_labels', 'noise_percent_pixels', 'noise_std_pixels'
-    ]
-    save_fname = '__'.join('{}_{}'.format(arg, args[arg])
-                           for arg in ordered_args)
+    save_fname = process_output_filename(args)
     os.makedirs(output_dir, exist_ok=True)
 
     # Set the appropriate device
@@ -116,7 +110,7 @@ def main(dataset, model, batch_size, epochs, optimizer, criterion,
     example_stats = {}
 
     best_acc = 0
-    for epoch in range(epochs):
+    for epoch in tqdm(range(epochs)):
         train(trainset, model, model_optimizer, criterion, batch_size, device,
               epoch, example_stats, epochs, train_indx)
         test(testset, model, criterion, device, example_stats, epoch,
@@ -126,13 +120,6 @@ def main(dataset, model, batch_size, epochs, optimizer, criterion,
         fname = os.path.join(output_dir, save_fname)
         with open(fname + "__stats_dict.pkl", "wb") as f:
             pickle.dump(example_stats, f)
-
-        # Log the best train and test accuracy so far
-        with open(fname + "__best_acc.txt", "w") as f:
-            f.write('train test \n')
-            f.write(str(max(example_stats['train'][1])))
-            f.write(' ')
-            f.write(str(max(example_stats['test'][1])))
 
 
 if __name__ == '__main__':

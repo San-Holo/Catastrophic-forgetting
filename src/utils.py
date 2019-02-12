@@ -5,6 +5,15 @@ import torch
 import torch.backends.cudnn as cudnn
 
 
+def process_output_filename(args):
+    ordered_args = [
+        'dataset', 'data_augmentation', 'cutout', 'seed', 'sorting_file',
+        'remove_n', 'removing_method', 'remove_subsample',
+        'noise_percent_labels', 'noise_percent_pixels', 'noise_std_pixels'
+    ]
+    return '__'.join('{}_{}'.format(arg, args[arg]) for arg in ordered_args)
+
+
 def set_seeds(seed, cuda):
     random.seed(seed)
     np.random.seed(seed)
